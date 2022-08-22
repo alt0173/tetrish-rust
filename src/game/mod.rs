@@ -16,38 +16,40 @@ pub const TIME_STEP: Duration = Duration::from_nanos(1_000_000_000 / FRAMERATE a
 /// Internal framerate (144fps);
 pub const ONE_FRAME: Duration = Duration::from_nanos(1_000_000_000 / 144);
 
+pub struct ActivePiece {
+	/// The coordinates currently occupied by the piece being dropped.
+	pub location: [[u8; 2]; 4],
+	/// The color pallete index of the current piece's color.
+	pub color: usize,
+	/// The location the selected piece will end up if hard-dropped.
+	pub drop_location: [[u8; 2]; 4],
+}
+
+impl Default for ActivePiece {
+	fn default() -> Self {
+		let random_number = random_usize() % 7;
+
+		Self {
+			location: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
+			color: random_number + 2,
+			drop_location: [[0; 2]; 4],
+		}
+	}
+}
+
 /// Contains board, piece bag, etc.
+#[derive(Default)]
 pub struct GameState {
 	/// Contains the board, with squares being either empty None, or filled Some(u8).
 	/// Filled squares color values will be mapped to a color by the UI.
 	pub board: [[Option<u8>; 24]; 10],
 	/// The coordinates currently occupied by the piece being dropped.
-	pub active_piece: [[u8; 2]; 4],
-	/// The color pallete index of the current piece's color.
-	pub active_piece_color: usize,
-	/// The location the selected piece will end up if hard-dropped.
-	pub active_piece_drop_location: [[u8; 2]; 4],
+	pub active_piece: ActivePiece,
 	/// When this reaches 1.0, the selected piece will move down.
 	piece_movement: f32,
 	/// Time of the last tick. Used for things like block drop speed.
 	pub delta_time: Duration,
 	pub input: WinitInputHelper,
-}
-
-impl Default for GameState {
-	fn default() -> Self {
-		let random_number = random_usize() % 7;
-
-		Self {
-			board: Default::default(),
-			active_piece: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
-			active_piece_color: random_number + 2,
-			active_piece_drop_location: [[0; 2]; 4],
-			piece_movement: 0.0,
-			delta_time: Duration::ZERO,
-			input: WinitInputHelper::new(),
-		}
-	}
 }
 
 impl GameState {
@@ -59,7 +61,7 @@ impl GameState {
 			// Increment timestep, gravity, etc.
 			self.delta_time -= ONE_FRAME;
 			self.piece_movement += 0.02;
-			self.active_piece_drop_location = self.selected_piece_drop_location();
+			self.active_piece.drop_location = self.selected_piece_drop_location();
 
 			// Lose game is piece goes too high
 			for x in 0..10 {
@@ -96,60 +98,67 @@ impl GameState {
 			}
 
 			// Check if piece can be moved down
-			if self.piece_can_move(self.active_piece, 0, 1) {
-				while self.piece_movement > 1.0 && self.piece_can_move(self.active_piece, 0, 1) {
+			if self.piece_can_move(self.active_piece.location, 0, 1) {
+				while self.piece_movement > 1.0 && self.piece_can_move(self.active_piece.location, 0, 1) {
 					self.piece_movement -= 1.0;
 
 					// Move selected piece down every tick (Gravity)
-					for position in self.active_piece.iter_mut() {
+					for position in self.active_piece.location.iter_mut() {
 						position[1] += 1;
 					}
 				}
 			} else {
 				// Add selected piece to static board
-				for xy in self.active_piece.iter() {
-					self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece_color as u8);
+				for xy in self.active_piece.location.iter() {
+					self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece.color as u8);
 				}
 
 				// Generate a new piece
 				let random_number = random_usize() % 7;
-				self.active_piece = PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]);
-				self.active_piece_color = random_number + 2;
+				self.active_piece.location = PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]);
+				self.active_piece.color = random_number + 2;
 			}
 		}
 	}
 
 	pub fn handle_input(&mut self) {
 		// Move down
-		if self.input.key_held(VirtualKeyCode::S) && self.piece_can_move(self.active_piece, 0, 1) {
+		if self.input.key_held(VirtualKeyCode::S)
+			&& self.piece_can_move(self.active_piece.location, 0, 1)
+		{
 			self.piece_movement += 0.25;
 		}
 
 		// Move left
-		if self.input.key_pressed(VirtualKeyCode::A) && self.piece_can_move(self.active_piece, -1, 0) {
-			self.active_piece = self.active_piece.map(|xy| [xy[0] - 1, xy[1]]);
+		if self.input.key_pressed(VirtualKeyCode::A)
+			&& self.piece_can_move(self.active_piece.location, -1, 0)
+		{
+			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] - 1, xy[1]]);
 		}
 
 		// Move right
-		if self.input.key_pressed(VirtualKeyCode::D) && self.piece_can_move(self.active_piece, 1, 0) {
-			self.active_piece = self.active_piece.map(|xy| [xy[0] + 1, xy[1]]);
+		if self.input.key_pressed(VirtualKeyCode::D)
+			&& self.piece_can_move(self.active_piece.location, 1, 0)
+		{
+			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] + 1, xy[1]]);
 		}
 
 		// Hard drop
 		if self.input.key_pressed(VirtualKeyCode::LShift) {
-			self.active_piece = self.active_piece_drop_location;
+			self.active_piece.location = self.active_piece.drop_location;
 		}
 
 		// Rotation
 		if self.input.key_pressed(VirtualKeyCode::Q) || self.input.key_pressed(VirtualKeyCode::E) {
-			let mut selected_piece_destination = [[0; 2]; 4];
-			let pivot = self.active_piece[0];
+			let mut active_piece_destination = [[0; 2]; 4];
+			let pivot = self.active_piece.location[0];
 
 			// Compute the piece's destination after rotation
 			for (xy, destination) in self
 				.active_piece
+				.location
 				.iter_mut()
-				.zip(selected_piece_destination.iter_mut())
+				.zip(active_piece_destination.iter_mut())
 			{
 				// The jank here is to prevent underflow :|
 				if self.input.key_pressed(VirtualKeyCode::Q) {
@@ -161,8 +170,8 @@ impl GameState {
 				}
 			}
 
-			if self.is_space_open(&selected_piece_destination) {
-				self.active_piece = selected_piece_destination;
+			if self.is_space_open(&active_piece_destination) {
+				self.active_piece.location = active_piece_destination;
 			}
 		}
 	}
@@ -214,11 +223,14 @@ impl GameState {
 	fn selected_piece_drop_location(&self) -> [[u8; 2]; 4] {
 		let mut down: u8 = 0;
 
-		while self.piece_can_move(self.active_piece, 0, down as i8) {
+		while self.piece_can_move(self.active_piece.location, 0, down as i8) {
 			down += 1;
 		}
 
-		self.active_piece.map(|xy| [xy[0], xy[1] + down - 1])
+		self
+			.active_piece
+			.location
+			.map(|xy| [xy[0], xy[1] + down - 1])
 	}
 }
 

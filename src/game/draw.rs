@@ -37,19 +37,24 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 
 			if let Some(tile) = game_state.board[x][y] {
 				color = COLOR_PALLETE[tile as usize];
-			} else if game_state.active_piece.contains(&[x as u8, y as u8]) {
+			} else if game_state
+				.active_piece
+				.location
+				.contains(&[x as u8, y as u8])
+			{
 				// The piece currently being dropped
-				color = COLOR_PALLETE[game_state.active_piece_color];
+				color = COLOR_PALLETE[game_state.active_piece.color];
 			} else {
 				// Otherwise, background color
 				color = COLOR_PALLETE[0];
 
 				// Drop location highlighting
 				if game_state
-					.active_piece_drop_location
+					.active_piece
+					.drop_location
 					.contains(&[x as u8, y as u8])
 				{
-					let mut block_color = COLOR_PALLETE[game_state.active_piece_color];
+					let mut block_color = COLOR_PALLETE[game_state.active_piece.color];
 					block_color[3] = 128;
 					color = block_color;
 				}
