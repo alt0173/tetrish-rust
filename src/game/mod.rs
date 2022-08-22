@@ -2,7 +2,7 @@ pub mod draw;
 pub mod letters;
 pub mod piece;
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
@@ -23,6 +23,10 @@ pub struct ActivePiece {
 	pub color: usize,
 	/// The location the selected piece will end up if hard-dropped.
 	pub drop_location: [[u8; 2]; 4],
+	/// The instant at which this piece was last moved by the player.
+	/// The piece will not be locked in to the board unless this is
+	/// sufficiently high.
+	pub resting_start: Option<Instant>,
 }
 
 impl Default for ActivePiece {
@@ -33,12 +37,12 @@ impl Default for ActivePiece {
 			location: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
 			color: random_number + 2,
 			drop_location: [[0; 2]; 4],
+			resting_start: None,
 		}
 	}
 }
 
 /// Contains board, piece bag, etc.
-#[derive(Default)]
 pub struct GameState {
 	/// Contains the board, with squares being either empty None, or filled Some(u8).
 	/// Filled squares color values will be mapped to a color by the UI.
@@ -50,6 +54,20 @@ pub struct GameState {
 	/// Time of the last tick. Used for things like block drop speed.
 	pub delta_time: Duration,
 	pub input: WinitInputHelper,
+	pub start_time: Instant,
+}
+
+impl Default for GameState {
+	fn default() -> Self {
+		Self {
+			start_time: Instant::now(),
+			board: Default::default(),
+			active_piece: Default::default(),
+			piece_movement: Default::default(),
+			delta_time: Default::default(),
+			input: Default::default(),
+		}
+	}
 }
 
 impl GameState {
@@ -107,16 +125,24 @@ impl GameState {
 						position[1] += 1;
 					}
 				}
-			} else {
-				// Add selected piece to static board
-				for xy in self.active_piece.location.iter() {
-					self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece.color as u8);
-				}
 
-				// Generate a new piece
-				let random_number = random_usize() % 7;
-				self.active_piece.location = PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]);
-				self.active_piece.color = random_number + 2;
+				self.active_piece.resting_start = None;
+			// If the piece can't move down and has been resting for an ammount of time
+			} else if let Some(resting_start) = self.active_piece.resting_start {
+				if Instant::now().duration_since(resting_start).as_millis() > 500 {
+					// Add selected piece to static board
+					for xy in self.active_piece.location.iter() {
+						self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece.color as u8);
+					}
+
+					// Generate a new piece
+					let random_number = random_usize() % 7;
+					self.active_piece.location = PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]);
+					self.active_piece.color = random_number + 2;
+				}
+			// If the piece can't move down and is not resting
+			} else {
+				self.active_piece.resting_start = Some(Instant::now());
 			}
 		}
 	}
@@ -127,6 +153,7 @@ impl GameState {
 			&& self.piece_can_move(self.active_piece.location, 0, 1)
 		{
 			self.piece_movement += 0.25;
+			self.refresh_resting_time();
 		}
 
 		// Move left
@@ -134,6 +161,7 @@ impl GameState {
 			&& self.piece_can_move(self.active_piece.location, -1, 0)
 		{
 			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] - 1, xy[1]]);
+			self.refresh_resting_time();
 		}
 
 		// Move right
@@ -141,11 +169,13 @@ impl GameState {
 			&& self.piece_can_move(self.active_piece.location, 1, 0)
 		{
 			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] + 1, xy[1]]);
+			self.refresh_resting_time();
 		}
 
 		// Hard drop
 		if self.input.key_pressed(VirtualKeyCode::LShift) {
 			self.active_piece.location = self.active_piece.drop_location;
+			self.active_piece.resting_start = Some(self.start_time);
 		}
 
 		// Rotation
@@ -173,6 +203,8 @@ impl GameState {
 			if self.is_space_open(&active_piece_destination) {
 				self.active_piece.location = active_piece_destination;
 			}
+
+			self.refresh_resting_time();
 		}
 	}
 
@@ -231,6 +263,13 @@ impl GameState {
 			.active_piece
 			.location
 			.map(|xy| [xy[0], xy[1] + down - 1])
+	}
+
+	/// Update the resting time if it is `Some`, otherwise do nothing.
+	fn refresh_resting_time(&mut self) {
+		if let Some(resting_start) = &mut self.active_piece.resting_start {
+			*resting_start = Instant::now();
+		}
 	}
 }
 
