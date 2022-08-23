@@ -1,12 +1,13 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Simple linear congruential generator.
 #[derive(Default)]
 pub struct LCG {
 	pub last_value: usize,
 }
 
 impl LCG {
-	/// Generates a random usize via a linear congruential generator.
+	/// Generates a random usize.
 	fn random_usize(&mut self) -> usize {
 		let salt = (SystemTime::now()
 			.duration_since(UNIX_EPOCH)
