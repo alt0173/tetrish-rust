@@ -1,6 +1,6 @@
 use crate::ui::{text::draw_text, COLOR_PALLETE, SCREEN_HEIGHT, SCREEN_WIDTH};
 
-use super::{point_in_rectangle, usize_to_xy, GameState};
+use super::{piece::PIECES, point_in_rectangle, usize_to_xy, GameState};
 
 pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 	// Iterate over all RGBA values (pixels) in the buffer
@@ -67,6 +67,27 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 		} else if point_in_rectangle(point, (48, 0), (80, 72)) {
 			// Border
 			color = COLOR_PALLETE[1];
+		}
+
+		// Incoming piece background
+		if point_in_rectangle(point, (85, 5), (89, 41)) {
+			color = COLOR_PALLETE[0];
+		}
+		// Bag / incoming piece display
+		if point_in_rectangle(point, (86, 5), (88, 41)) {
+			let (x, y) = (x - 86, y - 5);
+
+			if y % 5 != 0 {
+				let piece_index = game_state.bag[y / 5];
+				// Converts the local y (within this rectangle) into a value between
+				// 0 and 4, ignoring every 5th pixel (for spacing)
+				let piece_y = y - ((y as f32 / 5.0).floor() as usize * 5) - 1;
+
+				// Checks if the piece contains this position, drawing it if so
+				if PIECES[piece_index].contains(&[x as u8, piece_y as u8]) {
+					color = COLOR_PALLETE[piece_index + 2];
+				}
+			}
 		}
 
 		pixel.copy_from_slice(&color);

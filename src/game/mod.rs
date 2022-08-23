@@ -97,11 +97,11 @@ impl GameState {
 				}
 			}
 
-			// Lose game is piece goes too high
+			// Restart game is piece goes too high
 			for x in 0..10 {
 				for y in 0..4 {
 					if self.board[x][y].is_some() {
-						panic!();
+						*self = GameState::default();
 					}
 				}
 			}
@@ -155,8 +155,6 @@ impl GameState {
 					self.active_piece.location = PIECES[self.bag[0]].map(|xy| [xy[0] + 4, xy[1]]);
 					self.active_piece.color = self.bag[0] + 2;
 					self.bag.pop_front();
-
-					println!("{:?}", self.bag);
 				}
 			// If the piece can't move down and is not resting
 			} else {
@@ -280,7 +278,7 @@ impl GameState {
 		self
 			.active_piece
 			.location
-			.map(|xy| [xy[0], xy[1] + down - 1])
+			.map(|xy| [xy[0], (xy[1] + down).saturating_sub(1)])
 	}
 
 	/// Update the resting time if it is `Some`, otherwise do nothing.
