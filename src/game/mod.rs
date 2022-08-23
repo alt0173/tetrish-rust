@@ -2,6 +2,7 @@ pub mod draw;
 pub mod letters;
 pub mod piece;
 pub mod rng;
+pub mod update;
 
 use std::{
 	collections::VecDeque,
@@ -81,86 +82,7 @@ impl Default for GameState {
 
 impl GameState {
 	pub fn update(&mut self) {
-		// Update delta time
-		self.delta_time += TIME_STEP;
-
-		while self.delta_time >= ONE_FRAME {
-			// Increment timestep, gravity, etc.
-			self.delta_time -= ONE_FRAME;
-			self.piece_movement += 0.02;
-			self.active_piece.drop_location = self.selected_piece_drop_location();
-
-			// Re-fill bag if needed
-			if self.bag.len() == 7 {
-				for _ in 0..7 {
-					self.bag.push_back(self.lcg.random_piece() % 7);
-				}
-			}
-
-			// Restart game is piece goes too high
-			for x in 0..10 {
-				for y in 0..4 {
-					if self.board[x][y].is_some() {
-						*self = GameState::default();
-					}
-				}
-			}
-
-			// Remove full rows
-			for y in 4..24 {
-				let mut contains_empty = false;
-				for x in 0..10 {
-					if self.board[x][y].is_none() {
-						contains_empty = true;
-					}
-				}
-
-				// Remove row
-				if !contains_empty {
-					for x in 0..10 {
-						self.board[x][y] = None;
-					}
-
-					// Move all rows above it down
-					for y in (4..y).rev() {
-						for x in 0..10 {
-							self.board[x][y + 1] = self.board[x][y];
-							self.board[x][y] = None;
-						}
-					}
-				}
-			}
-
-			// Check if piece can be moved down
-			if self.piece_can_move(self.active_piece.location, 0, 1) {
-				while self.piece_movement > 1.0 && self.piece_can_move(self.active_piece.location, 0, 1) {
-					self.piece_movement -= 1.0;
-
-					// Move selected piece down every tick (Gravity)
-					for position in self.active_piece.location.iter_mut() {
-						position[1] += 1;
-					}
-				}
-
-				self.active_piece.resting_start = None;
-			// If the piece can't move down and has been resting for an ammount of time
-			} else if let Some(resting_start) = self.active_piece.resting_start {
-				if Instant::now().duration_since(resting_start).as_millis() > 500 {
-					// Add selected piece to static board
-					for xy in self.active_piece.location.iter() {
-						self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece.color as u8);
-					}
-
-					// Load the next piece
-					self.active_piece.location = PIECES[self.bag[0]].map(|xy| [xy[0] + 4, xy[1]]);
-					self.active_piece.color = self.bag[0] + 2;
-					self.bag.pop_front();
-				}
-			// If the piece can't move down and is not resting
-			} else {
-				self.active_piece.resting_start = Some(Instant::now());
-			}
-		}
+		update::update(self);
 	}
 
 	pub fn handle_input(&mut self) {
