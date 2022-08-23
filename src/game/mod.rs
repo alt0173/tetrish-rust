@@ -1,15 +1,19 @@
 pub mod draw;
 pub mod letters;
 pub mod piece;
+pub mod rng;
 
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::{
+	collections::VecDeque,
+	time::{Duration, Instant},
+};
 
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 
 use crate::ui::SCREEN_WIDTH;
 
-use self::piece::PIECES;
+use self::{piece::PIECES, rng::LCG};
 
 pub const FRAMERATE: usize = 200;
 pub const TIME_STEP: Duration = Duration::from_nanos(1_000_000_000 / FRAMERATE as u64);
@@ -29,19 +33,6 @@ pub struct ActivePiece {
 	pub resting_start: Option<Instant>,
 }
 
-impl Default for ActivePiece {
-	fn default() -> Self {
-		let random_number = random_usize() % 7;
-
-		Self {
-			location: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
-			color: random_number + 2,
-			drop_location: [[0; 2]; 4],
-			resting_start: None,
-		}
-	}
-}
-
 /// Contains board, piece bag, etc.
 pub struct GameState {
 	/// Contains the board, with squares being either empty None, or filled Some(u8).
@@ -49,23 +40,41 @@ pub struct GameState {
 	pub board: [[Option<u8>; 24]; 10],
 	/// The coordinates currently occupied by the piece being dropped.
 	pub active_piece: ActivePiece,
+	pub input: WinitInputHelper,
+	/// Vec of 14 indices representing pieces (looked up in `PIECES` and
+	/// `COLOR_PALLETE`). When it reaches length 7, 7 new pieces are added.
+	pub bag: VecDeque<usize>,
 	/// When this reaches 1.0, the selected piece will move down.
 	piece_movement: f32,
-	/// Time of the last tick. Used for things like block drop speed.
-	pub delta_time: Duration,
-	pub input: WinitInputHelper,
-	pub start_time: Instant,
+	delta_time: Duration,
+	start_time: Instant,
+	lcg: LCG,
 }
 
 impl Default for GameState {
 	fn default() -> Self {
+		let mut lcg = LCG::default();
+		let random_number = lcg.random_piece() % 7;
+		let mut bag = VecDeque::new();
+
+		for _ in 0..14 {
+			bag.push_back(lcg.random_piece() % 7);
+		}
+
 		Self {
 			start_time: Instant::now(),
 			board: Default::default(),
-			active_piece: Default::default(),
+			active_piece: ActivePiece {
+				location: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
+				color: random_number + 2,
+				drop_location: [[0; 2]; 4],
+				resting_start: None,
+			},
+			input: Default::default(),
+			bag,
 			piece_movement: Default::default(),
 			delta_time: Default::default(),
-			input: Default::default(),
+			lcg,
 		}
 	}
 }
@@ -80,6 +89,13 @@ impl GameState {
 			self.delta_time -= ONE_FRAME;
 			self.piece_movement += 0.02;
 			self.active_piece.drop_location = self.selected_piece_drop_location();
+
+			// Re-fill bag if needed
+			if self.bag.len() == 7 {
+				for _ in 0..7 {
+					self.bag.push_back(self.lcg.random_piece() % 7);
+				}
+			}
 
 			// Lose game is piece goes too high
 			for x in 0..10 {
@@ -135,10 +151,12 @@ impl GameState {
 						self.board[xy[0] as usize][xy[1] as usize] = Some(self.active_piece.color as u8);
 					}
 
-					// Generate a new piece
-					let random_number = random_usize() % 7;
-					self.active_piece.location = PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]);
-					self.active_piece.color = random_number + 2;
+					// Load the next piece
+					self.active_piece.location = PIECES[self.bag[0]].map(|xy| [xy[0] + 4, xy[1]]);
+					self.active_piece.color = self.bag[0] + 2;
+					self.bag.pop_front();
+
+					println!("{:?}", self.bag);
 				}
 			// If the piece can't move down and is not resting
 			} else {
@@ -290,13 +308,4 @@ pub fn xy_to_usize(input: (u8, u8)) -> usize {
 /// and maxmimum point. All coordinates are 2D XY.
 fn point_in_rectangle(point: (u8, u8), min: (u8, u8), max: (u8, u8)) -> bool {
 	point.0 >= min.0 && point.1 >= min.1 && point.0 < max.0 && point.1 < max.1
-}
-
-fn random_usize() -> usize {
-	let seed = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap()
-		.as_nanos()
-		/ 85819;
-	((1255 * seed + 6173) % 29282).try_into().unwrap()
 }
