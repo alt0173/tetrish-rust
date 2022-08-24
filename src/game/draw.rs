@@ -1,4 +1,7 @@
-use crate::ui::{text::draw_text, COLOR_PALLETE, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::ui::{
+	text::{draw_numbers, draw_text},
+	COLOR_PALLETE, SCREEN_HEIGHT, SCREEN_WIDTH,
+};
 
 use super::{piece::PIECES, point_in_rectangle, usize_to_xy, GameState};
 
@@ -23,8 +26,18 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 			if !point_in_rectangle(
 				point,
 				(1 + offset, 1 + offset),
+				(48 - 1 - offset, SCREEN_HEIGHT - 1 - offset),
+			) && x < 49
+			{
+				color = color.map(|v| (v as f32 * 0.75) as u8);
+			}
+
+			if !point_in_rectangle(
+				point,
+				(81 + offset, 1 + offset),
 				(SCREEN_WIDTH - 1 - offset, SCREEN_HEIGHT - 1 - offset),
-			) {
+			) && x > 79
+			{
 				color = color.map(|v| (v as f32 * 0.75) as u8);
 			}
 		}
@@ -93,5 +106,6 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 		pixel.copy_from_slice(&color);
 	}
 
-	draw_text((5, 5), "TETRUST", frame);
+	draw_text((5, 5), "LINES", frame);
+	draw_numbers((5, 11), game_state.line_clears, frame);
 }

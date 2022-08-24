@@ -1,4 +1,6 @@
+pub mod alphabet;
 pub mod event_loop;
+pub mod numbers;
 pub mod text;
 
 use winit::dpi::LogicalSize;

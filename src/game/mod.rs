@@ -1,5 +1,4 @@
 pub mod draw;
-pub mod letters;
 pub mod piece;
 pub mod rng;
 pub mod update;
@@ -49,6 +48,8 @@ pub struct GameState {
 	piece_movement: f32,
 	delta_time: Duration,
 	start_time: Instant,
+	move_start_time: Option<Instant>,
+	line_clears: usize,
 	lcg: LCG,
 }
 
@@ -63,7 +64,6 @@ impl Default for GameState {
 		}
 
 		Self {
-			start_time: Instant::now(),
 			board: Default::default(),
 			active_piece: ActivePiece {
 				location: PIECES[random_number].map(|xy| [xy[0] + 4, xy[1]]),
@@ -75,6 +75,9 @@ impl Default for GameState {
 			bag,
 			piece_movement: Default::default(),
 			delta_time: Default::default(),
+			start_time: Instant::now(),
+			move_start_time: None,
+			line_clears: 0,
 			lcg,
 		}
 	}
@@ -94,20 +97,38 @@ impl GameState {
 			self.refresh_resting_time();
 		}
 
-		// Move left
-		if self.input.key_pressed(VirtualKeyCode::A)
-			&& self.piece_can_move(self.active_piece.location, -1, 0)
-		{
-			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] - 1, xy[1]]);
-			self.refresh_resting_time();
+		// Move left / right
+		for (keycode, offset) in [(VirtualKeyCode::A, -1), (VirtualKeyCode::D, 1)] {
+			if self.piece_can_move(self.active_piece.location, offset, 0) {
+				let target_location = self
+					.active_piece
+					.location
+					.map(|xy| [(xy[0] as i8 + offset) as u8, xy[1]]);
+
+				// Move when key pressed
+				if self.input.key_pressed(keycode) {
+					self.active_piece.location = target_location;
+					self.refresh_resting_time();
+				}
+
+				// Move when key held
+				if self.input.key_held(keycode) {
+					if let Some(move_start_time) = self.move_start_time {
+						// Move quickly if the key has been held for long enough
+						if Instant::now().duration_since(move_start_time).as_millis() > 350 && self.delta_time > TIME_STEP {
+							self.active_piece.location = target_location;
+							self.refresh_resting_time();
+						}
+					} else {
+						self.move_start_time = Some(Instant::now());
+					}
+				}
+			}
 		}
 
-		// Move right
-		if self.input.key_pressed(VirtualKeyCode::D)
-			&& self.piece_can_move(self.active_piece.location, 1, 0)
-		{
-			self.active_piece.location = self.active_piece.location.map(|xy| [xy[0] + 1, xy[1]]);
-			self.refresh_resting_time();
+		// Reset key hold time when key released
+		if self.input.key_released(VirtualKeyCode::A) || self.input.key_released(VirtualKeyCode::D) {
+			self.move_start_time = None;
 		}
 
 		// Hard drop

@@ -50,6 +50,8 @@ pub fn update(state: &mut GameState) {
 						state.board[x][y] = None;
 					}
 				}
+
+				state.line_clears += 1;
 			}
 		}
 
