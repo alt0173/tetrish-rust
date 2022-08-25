@@ -115,7 +115,7 @@ impl GameState {
 				if self.input.key_held(keycode) {
 					if let Some(move_start_time) = self.move_start_time {
 						// Move quickly if the key has been held for long enough
-						if Instant::now().duration_since(move_start_time).as_millis() > 350 && self.delta_time > TIME_STEP {
+						if Instant::now().duration_since(move_start_time).as_millis() > 175 && self.delta_time > TIME_STEP {
 							self.active_piece.location = target_location;
 							self.refresh_resting_time();
 						}
