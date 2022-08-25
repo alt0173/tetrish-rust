@@ -22,7 +22,7 @@ pub fn draw_text<S: ToString>(point: (u8, u8), text: S, frame: &mut [u8]) {
 			for (y_index, y) in ((point.1)..(point.1 + 5)).enumerate() {
 				let pixel = &mut frame
 					.chunks_exact_mut(4)
-					.nth(xy_to_usize((x.try_into().unwrap(), y.try_into().unwrap())))
+					.nth(xy_to_usize(x, y.into()))
 					.unwrap();
 
 				if character[y_index][x_index] {
@@ -54,7 +54,7 @@ pub fn draw_numbers<S: ToString>(point: (u8, u8), text: S, frame: &mut [u8]) {
 			for (y_index, y) in ((point.1)..(point.1 + 5)).enumerate() {
 				let pixel = &mut frame
 					.chunks_exact_mut(4)
-					.nth(xy_to_usize((x.try_into().unwrap(), y.try_into().unwrap())))
+					.nth(xy_to_usize(x, y.into()))
 					.unwrap();
 
 				if character[y_index][x_index] {

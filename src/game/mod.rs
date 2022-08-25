@@ -241,8 +241,8 @@ fn usize_to_xy(input: usize) -> (usize, usize) {
 }
 
 /// Converts a 2d coordinate (x, y) to 1d (e.g. index).
-pub fn xy_to_usize(input: (u8, u8)) -> usize {
-	input.0 as usize + input.1 as usize * SCREEN_WIDTH as usize
+pub fn xy_to_usize<I: Into<usize>>(x: I, y: I) -> usize {
+	x.into() + y.into() * SCREEN_WIDTH as usize
 }
 
 /// Returns true if a point is within a given rectangle, defined by a minimum
