@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use ui::event_loop::run_event_loop;
 
 pub mod game;
