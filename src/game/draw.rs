@@ -1,6 +1,9 @@
-use crate::ui::{text::draw_text, COLOR_PALLETE, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::ui::{
+	text::{draw_numbers, draw_text},
+	COLOR_PALLETE, SCREEN_HEIGHT, SCREEN_WIDTH,
+};
 
-use super::{point_in_rectangle, usize_to_xy, GameState};
+use super::{piece::PIECES, point_in_rectangle, usize_to_xy, GameState};
 
 pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 	// Iterate over all RGBA values (pixels) in the buffer
@@ -23,8 +26,18 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 			if !point_in_rectangle(
 				point,
 				(1 + offset, 1 + offset),
+				(48 - 1 - offset, SCREEN_HEIGHT - 1 - offset),
+			) && x < 49
+			{
+				color = color.map(|v| (v as f32 * 0.75) as u8);
+			}
+
+			if !point_in_rectangle(
+				point,
+				(81 + offset, 1 + offset),
 				(SCREEN_WIDTH - 1 - offset, SCREEN_HEIGHT - 1 - offset),
-			) {
+			) && x > 79
+			{
 				color = color.map(|v| (v as f32 * 0.75) as u8);
 			}
 		}
@@ -37,19 +50,24 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 
 			if let Some(tile) = game_state.board[x][y] {
 				color = COLOR_PALLETE[tile as usize];
-			} else if game_state.active_piece.contains(&[x as u8, y as u8]) {
+			} else if game_state
+				.active_piece
+				.location
+				.contains(&[x as u8, y as u8])
+			{
 				// The piece currently being dropped
-				color = COLOR_PALLETE[game_state.active_piece_color];
+				color = COLOR_PALLETE[game_state.active_piece.color];
 			} else {
 				// Otherwise, background color
 				color = COLOR_PALLETE[0];
 
 				// Drop location highlighting
 				if game_state
-					.active_piece_drop_location
+					.active_piece
+					.drop_location
 					.contains(&[x as u8, y as u8])
 				{
-					let mut block_color = COLOR_PALLETE[game_state.active_piece_color];
+					let mut block_color = COLOR_PALLETE[game_state.active_piece.color];
 					block_color[3] = 128;
 					color = block_color;
 				}
@@ -64,8 +82,30 @@ pub fn draw(game_state: &GameState, frame: &mut [u8]) {
 			color = COLOR_PALLETE[1];
 		}
 
+		// Incoming piece background
+		if point_in_rectangle(point, (85, 5), (89, 41)) {
+			color = COLOR_PALLETE[0];
+		}
+		// Bag / incoming piece display
+		if point_in_rectangle(point, (86, 5), (88, 41)) {
+			let (x, y) = (x - 86, y - 5);
+
+			if y % 5 != 0 {
+				let piece_index = game_state.bag[y / 5];
+				// Converts the local y (within this rectangle) into a value between
+				// 0 and 4, ignoring every 5th pixel (for spacing)
+				let piece_y = y - ((y as f32 / 5.0).floor() as usize * 5) - 1;
+
+				// Checks if the piece contains this position, drawing it if so
+				if PIECES[piece_index].contains(&[x as u8, piece_y as u8]) {
+					color = COLOR_PALLETE[piece_index + 2];
+				}
+			}
+		}
+
 		pixel.copy_from_slice(&color);
 	}
 
-	draw_text((5, 5), "TETRUST", frame);
+	draw_text((5, 5), "LINES", frame);
+	draw_numbers((5, 11), game_state.line_clears, frame);
 }
